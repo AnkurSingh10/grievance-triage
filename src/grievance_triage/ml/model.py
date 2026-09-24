@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 import torch
 import torch.nn as nn
-from .config import Config
+from ..core.config import Config
 import torch.nn.functional as F
 
 class MultiLayerFCNN(nn.Module):
@@ -73,7 +73,7 @@ def save_checkpoint(model, processor, config, category_labels, urgency_labels, p
 
 def load_trained_model(path, device=None):
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-    from .config import Config
+    from ..core.config import Config
     from .data import TextProcessor
     config = Config(**checkpoint["config"])
     config.device = device or config.device

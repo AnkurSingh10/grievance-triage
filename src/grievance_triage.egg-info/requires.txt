@@ -1,11 +1,7 @@
-# Core data processing and numerical computing
 numpy>=1.26
 pandas>=2.2
-
-# Model training and evaluation
 scikit-learn>=1.5
 torch>=2.5
-torchvision>=0.20
 mlflow>=2.17
 dagshub>=0.5
 python-dotenv>=1.0
@@ -19,6 +15,3 @@ sentence-transformers>=3.3
 langchain-core>=0.3
 langchain-google-genai>=2.0
 streamlit>=1.40
-
-# Required to run notebooks in VS Code/Jupyter
-ipykernel>=6.29

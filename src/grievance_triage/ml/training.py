@@ -1,13 +1,21 @@
 import logging
 import random
+import json
 
 import numpy as np
 import torch
 import mlflow
-from sklearn.metrics import accuracy_score, f1_score, recall_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from torch.utils.data import DataLoader
 
-from .config import CATEGORY_LABELS, URGENCY_LABELS
+from ..core.config import CATEGORY_LABELS, URGENCY_LABELS
 from .data import GrievanceDataset
 
 logger = logging.getLogger(__name__)
@@ -42,6 +50,79 @@ def build_scheduler(opt, cfg):
     if cfg.scheduler == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.epochs)
     return None
+
+
+def classification_metrics(true_values, predicted_values, labels):
+    report = classification_report(
+        true_values,
+        predicted_values,
+        labels=list(range(len(labels))),
+        target_names=labels,
+        output_dict=True,
+        zero_division=0,
+    )
+    return {
+        "accuracy": accuracy_score(true_values, predicted_values),
+        "precision_macro": precision_score(true_values, predicted_values, average="macro", zero_division=0),
+        "recall_macro": recall_score(true_values, predicted_values, average="macro", zero_division=0),
+        "f1_macro": f1_score(true_values, predicted_values, average="macro", zero_division=0),
+        "f1_weighted": f1_score(true_values, predicted_values, average="weighted", zero_division=0),
+        "per_class": {
+            label: {
+                "precision": report[label]["precision"],
+                "recall": report[label]["recall"],
+                "f1": report[label]["f1-score"],
+                "support": report[label]["support"],
+            }
+            for label in labels
+        },
+        "confusion_matrix": confusion_matrix(
+            true_values,
+            predicted_values,
+            labels=list(range(len(labels))),
+        ).tolist(),
+    }
+
+
+def log_validation_metrics(true_urgency, predicted_urgency, true_category, predicted_category, epoch):
+    department = classification_metrics(true_category, predicted_category, CATEGORY_LABELS)
+    urgency = classification_metrics(true_urgency, predicted_urgency, URGENCY_LABELS)
+    metrics = {
+        "department_accuracy": department["accuracy"],
+        "department_precision_macro": department["precision_macro"],
+        "department_recall_macro": department["recall_macro"],
+        "department_macro_f1": department["f1_macro"],
+        "department_weighted_f1": department["f1_weighted"],
+        "urgency_accuracy": urgency["accuracy"],
+        "urgency_precision_macro": urgency["precision_macro"],
+        "urgency_recall_macro": urgency["recall_macro"],
+        "urgency_macro_f1": urgency["f1_macro"],
+        "urgency_weighted_f1": urgency["f1_weighted"],
+    }
+    for task_name, result in (("department", department), ("urgency", urgency)):
+        for class_name, class_metrics in result["per_class"].items():
+            metric_name = class_name.replace("_", "-")
+            metrics[f"{task_name}_{metric_name}_precision"] = class_metrics["precision"]
+            metrics[f"{task_name}_{metric_name}_recall"] = class_metrics["recall"]
+            metrics[f"{task_name}_{metric_name}_f1"] = class_metrics["f1"]
+    if mlflow.active_run():
+        mlflow.log_metrics(metrics, step=epoch)
+    return department, urgency
+
+
+def log_final_reports(department, urgency):
+    if not mlflow.active_run():
+        return
+    mlflow.log_text(
+        json.dumps({"department": department, "urgency": urgency}, indent=2),
+        "metrics/classification_report.json",
+    )
+    for task_name, result in (("department", department), ("urgency", urgency)):
+        labels = CATEGORY_LABELS if task_name == "department" else URGENCY_LABELS
+        rows = [",".join(["actual/predicted"] + labels)]
+        rows.extend(",".join([labels[index]] + [str(value) for value in row])
+                    for index, row in enumerate(result["confusion_matrix"]))
+        mlflow.log_text("\n".join(rows), f"metrics/{task_name}_confusion_matrix.csv")
 
 def epoch_pass(model, loader, config, loss_fn, optimizer=None):
     training = optimizer is not None
@@ -81,14 +162,16 @@ def train_model(model, train_frame, validation_frame, config):
 
     optimizer = build_optimizer(model, config)
     scheduler = build_scheduler(optimizer, config)
-    critical_index = URGENCY_LABELS.index("critical")
-    best_key, best_state, stale_epochs = (-1.0, -1.0), None, 0
+    best_key, best_state, best_reports, stale_epochs = (-1.0, -1.0), None, None, 0
 
     for epoch in range(1, config.epochs + 1):
         train_loss, *_ = epoch_pass(model, train_loader, config, total_loss, optimizer)
         validation_loss, true_u, predicted_u, true_c, predicted_c = epoch_pass(model, validation_loader, config, total_loss)
-        critical_recall = recall_score(true_u, predicted_u, labels=[critical_index], average="macro", zero_division=0)
-        macro_f1 = f1_score(true_u, predicted_u, average="macro", zero_division=0)
+        department_metrics, urgency_metrics = log_validation_metrics(
+            true_u, predicted_u, true_c, predicted_c, epoch
+        )
+        critical_recall = urgency_metrics["per_class"]["critical"]["recall"]
+        macro_f1 = urgency_metrics["f1_macro"]
         logger.info("epoch=%d train_loss=%.4f val_loss=%.4f urgency_accuracy=%.4f urgency_macro_f1=%.4f critical_recall=%.4f category_accuracy=%.4f",
                     epoch, train_loss, validation_loss, accuracy_score(true_u, predicted_u), macro_f1,
                     critical_recall, accuracy_score(true_c, predicted_c))
@@ -96,14 +179,17 @@ def train_model(model, train_frame, validation_frame, config):
             mlflow.log_metrics({
                 "train_loss": train_loss,
                 "validation_loss": validation_loss,
-                "urgency_accuracy": accuracy_score(true_u, predicted_u),
-                "urgency_macro_f1": macro_f1,
                 "critical_recall": critical_recall,
-                "category_accuracy": accuracy_score(true_c, predicted_c),
+                "department_accuracy": department_metrics["accuracy"],
             }, step=epoch)
         key = (critical_recall, macro_f1)
         if key > best_key:
-            best_key, best_state, stale_epochs = key, {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}, 0
+            best_key, best_state, best_reports, stale_epochs = (
+                key,
+                {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
+                (department_metrics, urgency_metrics),
+                0,
+            )
         else:
             stale_epochs += 1
             if stale_epochs >= config.patience:
@@ -113,4 +199,5 @@ def train_model(model, train_frame, validation_frame, config):
             scheduler.step()
     if best_state is not None:
         model.load_state_dict(best_state)
+        log_final_reports(*best_reports)
     return model

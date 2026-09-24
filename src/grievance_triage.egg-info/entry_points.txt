@@ -1,0 +1,3 @@
+[console_scripts]
+grievance-api = grievance_triage.api.main:main
+grievance-triage = grievance_triage.cli:main

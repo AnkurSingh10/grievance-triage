@@ -1,8 +1,8 @@
 import argparse
 
-from .config import Config
-from .logging_utils import configure_logging
-from .pipeline import train_and_predict
+from .core.config import Config
+from .core.logging_utils import configure_logging
+from .ml.pipeline import train_and_predict
 
 
 def main():

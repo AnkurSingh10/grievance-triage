@@ -11,14 +11,15 @@ from mlflow.exceptions import MlflowException
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
-from .config import CATEGORY_LABELS, URGENCY_LABELS, Config
-from .data import TestDataset, TextProcessor
+from ..core.config import CATEGORY_LABELS, URGENCY_LABELS, Config
+from ..database.training_data import upload_training_data
+from .data import TestDataset, TextProcessor, build_complaint_text
 from .model import BiLSTMAttn, save_checkpoint
 from .training import set_seed, train_model
 from .tracking import log_config, log_input_file
 
 logger = logging.getLogger(__name__)
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
@@ -29,7 +30,7 @@ def _project_path(path: str | None, default: str) -> Path:
 
 def _prepare(frame, processor, labeled):
     frame = frame.copy()
-    frame["text"] = frame["subject"].fillna("").astype(str) + " . " + frame["body"].fillna("").astype(str)
+    frame["text"] = build_complaint_text(frame)
     frame["x"] = frame["text"].map(processor.encode)
     if labeled:
         frame["category"] = frame["label"].str.split("|").str[0]
@@ -76,11 +77,13 @@ def train_and_predict(train_path: str | None = None, test_path: str | None = Non
         log_input_file(test_path)
         train_frame = pd.read_csv(train_path)
         test_frame = pd.read_csv(test_path)
+        uploaded_train, uploaded_test = upload_training_data(train_frame, test_frame, train_path, test_path)
+        logger.info("Neon training data upload: train_rows=%d test_rows=%d", uploaded_train, uploaded_test)
         mlflow.log_metrics({"raw_train_rows": len(train_frame), "raw_test_rows": len(test_frame)})
         if "label" not in train_frame.columns:
             raise ValueError("train.csv must contain a 'label' column")
 
-        raw_text = train_frame["subject"].fillna("").astype(str) + " . " + train_frame["body"].fillna("").astype(str)
+        raw_text = build_complaint_text(train_frame)
         processor = TextProcessor(config)
         processor.fit(raw_text)
         train_frame = _prepare(train_frame, processor, labeled=True)

@@ -5,6 +5,19 @@ import torch
 from torch.utils.data import Dataset
 
 
+def build_complaint_text(frame):
+    """Build the classifier input from the complaint's text and context fields."""
+    def column(name):
+        return frame[name].fillna("").astype(str) if name in frame else ""
+
+    return (
+        "subject: " + column("subject")
+        + " body: " + column("body")
+        + " channel: " + column("channel")
+        + " history: " + column("complaint_history")
+    )
+
+
 class TextProcessor:
     def __init__(self, config):
         self.config = config
