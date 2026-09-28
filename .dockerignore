@@ -1,0 +1,34 @@
+# Git and IDE files
+.git
+.gitignore
+.vscode
+.idea
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Sensitive files
+.env
+
+# Raw training and test data (NOT needed in runtime container)
+data/
+
+# Notebooks and experiment tracking
+notebooks/
+mlruns/
+mlflow.db
+
+# Developer / scratch folders
+ankur/
+
+

@@ -1,6 +1,7 @@
 services:
   api:
     build: .
+    image: grievance-triage-api:latest
     env_file: .env
     ports:
       - "8000:8000"
@@ -10,9 +11,11 @@ services:
 
   dashboard:
     build: .
+    image: grievance-triage-dashboard:latest
     env_file: .env
     ports:
       - "8501:8501"
     volumes:
       - ./outputs:/app/outputs
     command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+

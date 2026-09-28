@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # Core data processing and numerical computing
 numpy>=1.26
 pandas>=2.2
