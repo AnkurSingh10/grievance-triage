@@ -1,7 +1,8 @@
 services:
   api:
+    image: ${IMAGE_TAG:-grievance-triage:latest}
     build: .
-    image: grievance-triage-api:latest
+    restart: always
     env_file: .env
     ports:
       - "8000:8000"
@@ -10,12 +11,14 @@ services:
     command: uvicorn grievance_triage.api.app:app --host 0.0.0.0 --port 8000
 
   dashboard:
+    image: ${IMAGE_TAG:-grievance-triage:latest}
     build: .
-    image: grievance-triage-dashboard:latest
+    restart: always
     env_file: .env
     ports:
       - "8501:8501"
     volumes:
       - ./outputs:/app/outputs
     command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+
 
