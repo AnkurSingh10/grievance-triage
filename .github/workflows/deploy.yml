@@ -82,7 +82,7 @@ jobs:
                   - "8501:8501"
                 volumes:
                   - ./outputs:/app/outputs
-                command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+                command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
             EOF
 
             # Configure AWS credentials and determine ECR Registry URL dynamically
