@@ -35,8 +35,13 @@ jobs:
             docker ps -q | xargs -r docker rm -f || true
             docker rm -f grievance-api grievance-dashboard grievance-triage-api-1 grievance-triage-dashboard-1 || true
 
-            # 2. Aggressively clean up all unused images, containers, networks, and build cache to free disk space FIRST
+            # 2. Deep OS and Docker disk cleanup to free maximum space on EC2
+            sudo journalctl --vacuum-time=1s || true
+            sudo apt-get clean || true
+            sudo rm -rf /var/lib/containerd/io.containerd.content.v1.content/ingest/* || true
+            sudo rm -rf /var/lib/docker/tmp/* || true
             docker system prune -af --volumes || true
+            docker builder prune -af || true
 
             # 3. Pull latest image from Docker Hub
             docker pull "$IMAGE_URI"
