@@ -31,13 +31,6 @@ import threading
 @app.on_event("startup")
 def startup():
     init_db()
-    def prewarm():
-        try:
-            from ..ml.inference import get_classifier
-            get_classifier()
-        except Exception as e:
-            print(f"Model pre-warm note: {e}")
-    threading.Thread(target=prewarm, daemon=True).start()
 
 
 def response_for(session: Session, complaint: Complaint) -> ComplaintResponse:

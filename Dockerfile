@@ -18,13 +18,14 @@ COPY streamlit_app.py .
 # Install local package without reinstalling dependencies
 RUN pip install --no-cache-dir --no-deps -e .
 
-# Create outputs directory & copy trained model checkpoint for runtime inference
+# Create outputs directory & copy trained model checkpoint + tokenizer for runtime inference
 RUN mkdir -p /app/outputs
 COPY outputs/*.pt ./outputs/
+COPY outputs/tokenizer.json outputs/tokenizer_config.json ./outputs/
 
-# Pre-download SentenceTransformer and MuRIL tokenizer (~5MB)
+# Pre-download SentenceTransformer (~90MB) and cache MuRIL config (~1KB)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
-RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('google/muril-base-cased')"
+RUN python -c "from transformers import AutoConfig; AutoConfig.from_pretrained('google/muril-base-cased')"
 
 EXPOSE 8000 8501
 

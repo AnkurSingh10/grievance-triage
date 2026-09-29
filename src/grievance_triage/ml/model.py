@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, BertConfig
 
 from ..core.config import Config
 
@@ -77,10 +77,26 @@ class BiLSTMAttn(nn.Module):
 class MuRILMultiTask(nn.Module):
     """Google MuRIL fine-tuning architecture for multi-task grievance triage."""
 
-    def __init__(self, cfg: Config, n_cat: int, n_urg: int):
+    def __init__(self, cfg: Config, n_cat: int, n_urg: int, from_pretrained: bool = True):
         super().__init__()
         self.model_name = getattr(cfg, "model_name", "google/muril-base-cased")
-        self.encoder = AutoModel.from_pretrained(self.model_name)
+
+        if from_pretrained:
+            # Training mode: download full pretrained weights from HuggingFace
+            self.encoder = AutoModel.from_pretrained(self.model_name)
+        else:
+            # Inference mode: create empty model shell using known MuRIL config
+            # (no network call, no 500MB download — all weights come from checkpoint)
+            encoder_config = BertConfig(
+                vocab_size=197285,
+                hidden_size=768,
+                num_hidden_layers=12,
+                num_attention_heads=12,
+                intermediate_size=3072,
+                max_position_embeddings=512,
+            )
+            self.encoder = AutoModel.from_config(encoder_config)
+
         H = self.encoder.config.hidden_size
 
         self.dropout = nn.Dropout(cfg.dropout)
@@ -146,7 +162,9 @@ def load_trained_model(path, device=None):
     model_type = checkpoint.get("model_type", getattr(config, "model_type", "muril"))
 
     if model_type == "muril":
-        model = MuRILMultiTask(config, len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]))
+        # Use from_pretrained=False to avoid downloading 500MB base model;
+        # all weights come from the checkpoint instead.
+        model = MuRILMultiTask(config, len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]), from_pretrained=False)
         model.load_state_dict(checkpoint["model_state_dict"], strict=False)
         model.to(config.device).eval()
         outputs_dir = Path(path).parent
