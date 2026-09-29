@@ -2,8 +2,11 @@ from dataclasses import asdict
 
 import torch
 import torch.nn as nn
-from ..core.config import Config
 import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer
+
+from ..core.config import Config
+
 
 class MultiLayerFCNN(nn.Module):
     """MLP head: 2 hidden layers, BatchNorm + ReLU + dropout."""
@@ -42,13 +45,20 @@ class Attention(nn.Module):
 
 
 class BiLSTMAttn(nn.Module):
+    """Preserved legacy BiLSTM model with attention (kept for comparison)."""
+
     def __init__(self, cfg: Config, vocab_size, n_cat, n_urg):
         super().__init__()
         H = cfg.hidden_dim * (2 if cfg.bidirectional else 1)
         self.embedding = nn.Embedding(vocab_size, cfg.emb_dim, padding_idx=cfg.pad_idx)
-        self.lstm = nn.LSTM(cfg.emb_dim, cfg.hidden_dim, num_layers=cfg.num_layers,
-                             batch_first=True, bidirectional=cfg.bidirectional,
-                             dropout=cfg.dropout if cfg.num_layers > 1 else 0.0)
+        self.lstm = nn.LSTM(
+            cfg.emb_dim,
+            cfg.hidden_dim,
+            num_layers=cfg.num_layers,
+            batch_first=True,
+            bidirectional=cfg.bidirectional,
+            dropout=cfg.dropout if cfg.num_layers > 1 else 0.0,
+        )
         self.attn = Attention(H, cfg.attn_dim)
         self.dropout = nn.Dropout(cfg.dropout)
         self.head_cat = MultiLayerFCNN(H, n_cat, hidden=cfg.head_hidden, dropout_rate=cfg.dropout)
@@ -63,24 +73,85 @@ class BiLSTMAttn(nn.Module):
         return self.head_cat(context), self.head_urg(context), alpha
 
 
+class MuRILMultiTask(nn.Module):
+    """Google MuRIL fine-tuning architecture for multi-task grievance triage."""
+
+    def __init__(self, cfg: Config, n_cat: int, n_urg: int):
+        super().__init__()
+        self.model_name = getattr(cfg, "model_name", "google/muril-base-cased")
+        self.encoder = AutoModel.from_pretrained(self.model_name)
+        H = self.encoder.config.hidden_size
+
+        self.dropout = nn.Dropout(cfg.dropout)
+        self.head_cat = nn.Sequential(
+            nn.Linear(H, cfg.head_hidden),
+            nn.ReLU(),
+            nn.Dropout(cfg.dropout),
+            nn.Linear(cfg.head_hidden, n_cat),
+        )
+        self.head_urg = nn.Sequential(
+            nn.Linear(H, cfg.head_hidden),
+            nn.ReLU(),
+            nn.Dropout(cfg.dropout),
+            nn.Linear(cfg.head_hidden, n_urg),
+        )
+
+        self.n_encoder_layers = len(self.encoder.encoder.layer)
+        self.freeze_encoder_embeddings()
+        self.set_unfrozen_layers(getattr(cfg, "initial_unfrozen_layers", 4))
+
+    def freeze_encoder_embeddings(self):
+        for p in self.encoder.embeddings.parameters():
+            p.requires_grad = False
+
+    def set_unfrozen_layers(self, n_unfrozen: int):
+        n_unfrozen = min(n_unfrozen, self.n_encoder_layers)
+        for i, layer in enumerate(self.encoder.encoder.layer):
+            unfreeze = i >= (self.n_encoder_layers - n_unfrozen)
+            for p in layer.parameters():
+                p.requires_grad = unfreeze
+        return n_unfrozen
+
+    def forward(self, input_ids, attention_mask):
+        out = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
+        cls = out.last_hidden_state[:, 0, :]
+        cls = self.dropout(cls)
+        return self.head_cat(cls), self.head_urg(cls)
+
+
 def save_checkpoint(model, processor, config, category_labels, urgency_labels, path):
-    torch.save({
-        "model_state_dict": model.state_dict(), "itos": processor.itos,
-        "config": asdict(config), "category_labels": category_labels,
+    checkpoint = {
+        "model_type": getattr(config, "model_type", "muril"),
+        "model_state_dict": model.state_dict(),
+        "config": asdict(config),
+        "category_labels": category_labels,
         "urgency_labels": urgency_labels,
-    }, path)
+    }
+    if hasattr(processor, "itos"):
+        checkpoint["itos"] = processor.itos
+    torch.save(checkpoint, path)
 
 
 def load_trained_model(path, device=None):
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     from ..core.config import Config
     from .data import TextProcessor
+
     config = Config(**checkpoint["config"])
     config.device = device or config.device
-    model = BiLSTMAttn(config, len(checkpoint["itos"]), len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]))
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.to(config.device).eval()
-    processor = TextProcessor(config)
-    processor.itos = checkpoint["itos"]
-    processor.stoi = {word: index for index, word in enumerate(processor.itos)}
-    return model, processor, config, checkpoint["category_labels"], checkpoint["urgency_labels"]
+    model_type = checkpoint.get("model_type", getattr(config, "model_type", "muril"))
+
+    if model_type == "muril":
+        model = MuRILMultiTask(config, len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]))
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.to(config.device).eval()
+        tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+        return model, tokenizer, config, checkpoint["category_labels"], checkpoint["urgency_labels"]
+    else:
+        model = BiLSTMAttn(config, len(checkpoint["itos"]), len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]))
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.to(config.device).eval()
+        processor = TextProcessor(config)
+        processor.itos = checkpoint["itos"]
+        processor.stoi = {word: index for index, word in enumerate(processor.itos)}
+        return model, processor, config, checkpoint["category_labels"], checkpoint["urgency_labels"]

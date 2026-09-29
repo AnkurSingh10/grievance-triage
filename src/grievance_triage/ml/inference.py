@@ -13,14 +13,36 @@ def get_classifier():
 
 
 def predict_complaint(subject: str, body: str, channel: str = "web", complaint_history: list | None = None) -> dict:
-    model, processor, config, departments, urgencies = get_classifier()
+    model, processor_or_tokenizer, config, departments, urgencies = get_classifier()
     history_text = " ".join(str(item) for item in (complaint_history or []))
     text = f"subject: {subject} body: {body} channel: {channel} history: {history_text}"
-    inputs = torch.tensor([processor.encode(text)], dtype=torch.long, device=config.device)
-    with torch.no_grad():
-        department_logits, urgency_logits, _ = model(inputs)
-        department_probabilities = torch.softmax(department_logits, dim=1)[0]
-        urgency_probabilities = torch.softmax(urgency_logits, dim=1)[0]
+
+    model_type = getattr(config, "model_type", "muril")
+
+    if model_type == "muril":
+        tokenizer = processor_or_tokenizer
+        max_len = getattr(config, "max_len", 200)
+        inputs = tokenizer(
+            text,
+            truncation=True,
+            padding="max_length",
+            max_length=max_len,
+            return_tensors="pt"
+        )
+        input_ids = inputs["input_ids"].to(config.device)
+        attention_mask = inputs["attention_mask"].to(config.device)
+        with torch.no_grad():
+            department_logits, urgency_logits = model(input_ids, attention_mask)
+            department_probabilities = torch.softmax(department_logits, dim=1)[0]
+            urgency_probabilities = torch.softmax(urgency_logits, dim=1)[0]
+    else:
+        processor = processor_or_tokenizer
+        inputs = torch.tensor([processor.encode(text)], dtype=torch.long, device=config.device)
+        with torch.no_grad():
+            department_logits, urgency_logits, _ = model(inputs)
+            department_probabilities = torch.softmax(department_logits, dim=1)[0]
+            urgency_probabilities = torch.softmax(urgency_logits, dim=1)[0]
+
     department_index = int(department_probabilities.argmax())
     urgency_index = int(urgency_probabilities.argmax())
     return {

@@ -39,3 +39,11 @@ class Config:
     w_urgency: float = 1.0
     use_class_weights: bool = True
     critical_boost: float = 3.0
+    model_type: str = "muril"
+    model_name: str = "google/muril-base-cased"
+    initial_unfrozen_layers: int = 4
+    unfreeze_step_per_epoch: int = 2
+    lr_encoder: float = 2e-5
+    lr_heads: float = 1e-3
+    warmup_ratio: float = 0.06
+

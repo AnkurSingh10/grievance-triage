@@ -41,6 +41,7 @@ class TextProcessor:
 
 
 class GrievanceDataset(Dataset):
+    """Legacy Dataset for BiLSTM model."""
     def __init__(self, frame):
         self.x = torch.tensor(np.stack(frame["x"].values), dtype=torch.long)
         self.y_category = torch.tensor(frame["y_cat"].values, dtype=torch.long)
@@ -54,6 +55,7 @@ class GrievanceDataset(Dataset):
 
 
 class TestDataset(Dataset):
+    """Legacy TestDataset for BiLSTM model."""
     def __init__(self, frame):
         self.x = torch.tensor(np.stack(frame["x"].values), dtype=torch.long)
 
@@ -62,3 +64,31 @@ class TestDataset(Dataset):
 
     def __getitem__(self, index):
         return self.x[index]
+
+
+class MuRILDataset(Dataset):
+    """Dataset for MuRIL transformer model."""
+
+    def __init__(self, texts, y_cat, y_urg, tokenizer, max_len=200):
+        self.enc = tokenizer(
+            list(texts),
+            truncation=True,
+            padding="max_length",
+            max_length=max_len,
+            return_tensors=None,
+        )
+        self.y_cat = y_cat
+        self.y_urg = y_urg
+
+    def __len__(self):
+        return len(self.enc["input_ids"])
+
+    def __getitem__(self, i):
+        item = {
+            "input_ids": torch.tensor(self.enc["input_ids"][i], dtype=torch.long),
+            "attention_mask": torch.tensor(self.enc["attention_mask"][i], dtype=torch.long),
+        }
+        if self.y_cat is not None:
+            item["y_cat"] = torch.tensor(int(self.y_cat[i]), dtype=torch.long)
+            item["y_urg"] = torch.tensor(int(self.y_urg[i]), dtype=torch.long)
+        return item

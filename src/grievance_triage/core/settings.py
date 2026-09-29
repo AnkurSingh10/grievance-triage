@@ -30,6 +30,9 @@ class Settings(BaseSettings):
 
     @property
     def checkpoint_path(self) -> Path:
+        muril_path = PROJECT_ROOT / "outputs" / "submission_muril_model.pt"
+        if muril_path.exists():
+            return muril_path
         path = Path(self.model_checkpoint)
         return path if path.is_absolute() else PROJECT_ROOT / path
 

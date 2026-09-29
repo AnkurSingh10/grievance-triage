@@ -20,10 +20,11 @@ RUN pip install --no-cache-dir --no-deps -e .
 
 # Create outputs directory & copy trained model checkpoint for runtime inference
 RUN mkdir -p /app/outputs
-COPY outputs/submission_model.pt ./outputs/submission_model.pt
+COPY outputs/*.pt ./outputs/
 
-# Pre-download SentenceTransformer model during build to eliminate runtime download
+# Pre-download SentenceTransformer and MuRIL tokenizer (~5MB)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('google/muril-base-cased')"
 
 EXPOSE 8000 8501
 
