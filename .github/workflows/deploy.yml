@@ -34,9 +34,9 @@ jobs:
             # Pull latest image from Docker Hub
             docker pull "$IMAGE_URI"
 
-            # Remove old containers if running
-            docker rm -f grievance-api || true
-            docker rm -f grievance-dashboard || true
+            # Stop and remove all old containers to free ports 8000 & 8501
+            docker ps -q | xargs -r docker rm -f || true
+            docker rm -f grievance-api grievance-dashboard grievance-triage-api-1 grievance-triage-dashboard-1 || true
 
             # Run FastAPI API Container on Port 8000
             docker run -d \
