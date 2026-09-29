@@ -1,14 +1,17 @@
-name: Deploy Direct from Docker Hub to AWS EC2
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy-to-ec2:
-    name: SSH into EC2 & Deploy Container from Docker Hub
+    name: Deploy Docker Hub image on EC2
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -16,41 +19,39 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 5m
           script: |
             set -e
             mkdir -p ~/grievance-triage
             cd ~/grievance-triage
 
-            # Automatically write .env from GitHub Secrets
+            # Write .env file from GitHub Secrets
             cat << 'EOF' > .env
             ${{ secrets.ENV_FILE }}
             EOF
 
-            # Automatically write docker-compose.yml on EC2 using Docker Hub image directly
-            cat << 'EOF' > docker-compose.yml
-            services:
-              api:
-                image: ankursingh01/govt-grievancev1:lastest
-                restart: always
-                env_file: .env
-                ports:
-                  - "8000:8000"
-                volumes:
-                  - ./outputs:/app/outputs
-                command: uvicorn grievance_triage.api.app:app --host 0.0.0.0 --port 8000
+            IMAGE_URI="ankursingh01/govt-grievancev1:lastest"
 
-              dashboard:
-                image: ankursingh01/govt-grievancev1:lastest
-                restart: always
-                env_file: .env
-                ports:
-                  - "8501:8501"
-                volumes:
-                  - ./outputs:/app/outputs
-                command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
-            EOF
+            # Pull latest image from Docker Hub
+            docker pull "$IMAGE_URI"
 
-            # Pull image directly from Docker Hub and run container
-            docker compose pull -q
-            docker compose up -d --remove-orphans
+            # Remove old containers if running
+            docker rm -f grievance-api || true
+            docker rm -f grievance-dashboard || true
+
+            # Run FastAPI API Container on Port 8000
+            docker run -d \
+              --name grievance-api \
+              --restart unless-stopped \
+              --env-file .env \
+              -p 8000:8000 \
+              "$IMAGE_URI" \
+              uvicorn grievance_triage.api.app:app --host 0.0.0.0 --port 8000
+
+            # Run Streamlit Dashboard Container on Port 8501
+            docker run -d \
+              --name grievance-dashboard \
+              --restart unless-stopped \
+              --env-file .env \
+              -p 8501:8501 \
+              "$IMAGE_URI" \
+              streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
