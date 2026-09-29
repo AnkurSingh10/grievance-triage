@@ -1,6 +1,6 @@
 services:
   api:
-    image: ${IMAGE_TAG:-grievance-triage:latest}
+    image: ${IMAGE_TAG:-ankursingh01/govt-grievancev1:lastest}
     build: .
     restart: always
     env_file: .env
@@ -11,7 +11,7 @@ services:
     command: uvicorn grievance_triage.api.app:app --host 0.0.0.0 --port 8000
 
   dashboard:
-    image: ${IMAGE_TAG:-grievance-triage:latest}
+    image: ${IMAGE_TAG:-ankursingh01/govt-grievancev1:lastest}
     build: .
     restart: always
     env_file: .env
