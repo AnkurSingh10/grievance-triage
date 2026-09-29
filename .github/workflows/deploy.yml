@@ -31,15 +31,15 @@ jobs:
 
             IMAGE_URI="ankursingh01/govt-grievance:latest"
 
-            # Pull latest image from Docker Hub
-            docker pull "$IMAGE_URI"
-
-            # Stop and remove all old containers to free ports 8000 & 8501
+            # 1. Stop and remove all running containers
             docker ps -q | xargs -r docker rm -f || true
             docker rm -f grievance-api grievance-dashboard grievance-triage-api-1 grievance-triage-dashboard-1 || true
 
-            # Prune old untagged images to prevent EC2 disk from filling up
-            docker image prune -f
+            # 2. Aggressively clean up all unused images, containers, networks, and build cache to free disk space FIRST
+            docker system prune -af --volumes || true
+
+            # 3. Pull latest image from Docker Hub
+            docker pull "$IMAGE_URI"
 
             # Run FastAPI API Container on Port 8000
             docker run -d \
