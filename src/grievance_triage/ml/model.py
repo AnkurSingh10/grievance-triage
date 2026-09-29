@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -138,14 +139,24 @@ def load_trained_model(path, device=None):
     from .data import TextProcessor
 
     config = Config(**checkpoint["config"])
-    config.device = device or config.device
+    if device:
+        config.device = device
+    elif not torch.cuda.is_available():
+        config.device = "cpu"
     model_type = checkpoint.get("model_type", getattr(config, "model_type", "muril"))
 
     if model_type == "muril":
         model = MuRILMultiTask(config, len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]))
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(checkpoint["model_state_dict"], strict=False)
         model.to(config.device).eval()
-        tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+        outputs_dir = Path(path).parent
+        if (outputs_dir / "tokenizer.json").exists():
+            tokenizer = AutoTokenizer.from_pretrained(str(outputs_dir))
+        else:
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(config.model_name, local_files_only=True)
+            except Exception:
+                tokenizer = AutoTokenizer.from_pretrained(config.model_name)
         return model, tokenizer, config, checkpoint["category_labels"], checkpoint["urgency_labels"]
     else:
         model = BiLSTMAttn(config, len(checkpoint["itos"]), len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]))
