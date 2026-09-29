@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     neon_db: str
     google_api_key: str
-    model_checkpoint: str = "outputs/submission_model.pt"
+    model_checkpoint: str = "outputs/submission_muril_model.pt"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dimension: int = 384
     complaint_similarity_threshold: float = 0.70
