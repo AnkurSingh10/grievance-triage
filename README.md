@@ -15,7 +15,7 @@ Modern public governance systems process millions of citizen complaints every ye
 - **Duplicate Grievance Sprawls:** A single civic disruption (e.g., a burst water main or traffic light failure) triggers hundreds of duplicate submissions, flooding field officers with redundant tasks.
 - **Cognitive Overload for Resolution Officers:** Reviewing officers lack instant access to relevant government circulars, SOPs, and past resolution precedents needed to make compliant, rapid decisions.
 
-**Grievance Command Centre** is an end-to-end, production-grade AI operating system for public administration. It combines **fine-tuned Indic multilingual transformers (Google MuRIL)**, **real-time vector similarity deduplication (Neon pgvector)**, and **grounded generative decision support (Google Gemini 1.5 Flash RAG)** to automate citizen triage, detect duplicate clusters, prioritize emergencies, and assist officers in taking verified, policy-backed action in seconds.
+**Grievance Command Centre** is an end-to-end, production-grade AI operating system for public administration. It combines **fine-tuned Indic multilingual transformers (Google MuRIL)**, **real-time vector similarity deduplication (Neon pgvector)**, and **grounded generative decision support (Google Gemini 2.5 Flash RAG)** to automate citizen triage, detect duplicate clusters, prioritize emergencies, and assist officers in taking verified, policy-backed action in seconds.
 
 ---
 
@@ -26,7 +26,7 @@ Modern public governance systems process millions of citizen complaints every ye
 | **Intelligent Routing** | Fine-tuned **Google MuRIL** with joint classification heads | Sub-50ms automated department assignment with **99.98% accuracy** across English & Hinglish text. |
 | **Urgency & SLA Triage** | Multi-task urgency scoring ($\text{P0}_{\text{Critical}}$ to $\text{P3}_{\text{Routine}}$) | Automatically computes dynamic SLA deadlines and flags life-safety hazards instantly. |
 | **Vector Deduplication** | **Neon pgvector** (384-d embeddings + HNSW cosine index) | Groups identical ($\ge 0.95$) and related ($0.85 - 0.95$) complaints, reducing duplicate field visits. |
-| **Grounded AI Officer Copilot** | **Google Gemini 1.5 Flash** RAG over government circulars & past cases | Generates actionable next steps, cited circular references, and precedent summaries without hallucinations. |
+| **Grounded AI Officer Copilot** | **Google Gemini 2.5 Flash** RAG over government circulars & past cases | Generates actionable next steps, cited circular references, and precedent summaries without hallucinations. |
 | **Microservice Architecture** | **FastAPI** (AWS EC2 Docker) + **Streamlit** (Render) | Clean separation of concerns with ultra-low latency inference and lightweight client frontend. |
 
 ---
@@ -64,7 +64,7 @@ The system runs vector similarity against past complaints using **Neon pgvector 
 
 ---
 
-### 4. Grounded AI Officer Assistance (Gemini 1.5 RAG)
+### 4. Grounded AI Officer Assistance (Gemini 2.5 Flash RAG)
 Officers can generate automated, policy-grounded resolution strategies with 1-click. The pipeline searches Neon for matching departmental circulars, standard operating procedures (SOPs), and historically resolved cases, prompting **Google Gemini** to output actionable recommendations and citations without hallucinations.
 
 ![Grounded AI Assistance](assets/05_gemini_rag_assistance.png)
@@ -114,7 +114,7 @@ flowchart TD
         FastAPI["FastAPI App (Docker Container)<br/>3.236.127.3:8000"]
         MuRIL["MuRIL FP16 Classifier<br/>(Dept & Urgency Inference)"]
         ST_Model["Sentence-Transformers<br/>(all-MiniLM-L6-v2)"]
-        Gemini["Google Gemini 1.5 Flash<br/>(Grounded RAG Agent)"]
+        Gemini["Google Gemini 2.5 Flash<br/>(Grounded RAG Agent)"]
     end
 
     subgraph Database ["Neon Cloud (Serverless Postgres)"]
@@ -138,7 +138,7 @@ flowchart TD
 - **Backend API:** FastAPI, Uvicorn, Pydantic v2, CORS Middleware.
 - **Deep Learning / NLP:** PyTorch, Transformers, Google MuRIL (`google/muril-base-cased`), SentenceTransformers (`all-MiniLM-L6-v2`).
 - **Database & Vectors:** Neon Serverless PostgreSQL, `pgvector` with HNSW cosine distance indexing, SQLAlchemy 2.0.
-- **Generative AI / RAG:** LangChain, Google Generative AI (`gemini-1.5-flash`), Prompt Grounding.
+- **Generative AI / RAG:** LangChain, Google Generative AI (`gemini-2.5-flash`), Prompt Grounding.
 - **MLOps & Experiment Tracking:** MLflow, DagsHub, GitHub Actions CI/CD, Docker Hub.
 - **Cloud Infrastructure:** AWS EC2 (Ubuntu 24.04), Render (Web Service).
 
@@ -183,7 +183,7 @@ docker run -d \
 | `GET` | `/complaints/{id}/status` | Track current status and complete transition audit history |
 | `GET` | `/complaints/{id}/related` | Retrieve similar/duplicate complaints via pgvector similarity |
 | `PATCH` | `/complaints/{id}/status` | Update workflow status with officer comments |
-| `POST` | `/complaints/{id}/assist` | Trigger grounded Gemini 1.5 Flash RAG resolution assistance |
+| `POST` | `/complaints/{id}/assist` | Trigger grounded Gemini 2.5 Flash RAG resolution assistance |
 | `POST` | `/officer/feedback` | Record officer feedback on department/urgency corrections |
 | `POST` | `/knowledge-documents` | Ingest and vectorize government policies/circulars |
 | `GET` | `/departments/{dept}/complaints` | Fetch real-time departmental queue |
