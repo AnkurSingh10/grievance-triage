@@ -1,6 +1,8 @@
 from uuid import UUID
+import os
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.openapi.utils import get_openapi
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,11 @@ from ..services.rag import officer_assistance
 
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Government Grievance Management API", version="0.1.0")
+app = FastAPI(
+    title="Government Grievance Management API",
+    version="0.1.0",
+    root_path=os.getenv("ROOT_PATH", ""),
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,12 +31,23 @@ app.add_middleware(
 )
 
 
-import threading
-
-
 @app.on_event("startup")
 def startup():
     init_db()
+
+
+@app.get("/openapi.json", include_in_schema=False)
+def custom_openapi(request: Request):
+    """Dynamically set the server URL so Swagger UI works on any host (local/Docker/AWS)."""
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    server_url = f"{scheme}://{request.headers['host']}"
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+    )
+    openapi_schema["servers"] = [{"url": server_url}]
+    return openapi_schema
 
 
 def response_for(session: Session, complaint: Complaint) -> ComplaintResponse:
