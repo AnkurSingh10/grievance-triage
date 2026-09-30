@@ -3,9 +3,12 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-FF4B4B.svg?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)](https://pytorch.org)
+[![AWS EC2](https://img.shields.io/badge/AWS_EC2-Backend_Deployed-232F3E.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)](http://3.236.127.3:8000/docs)
+[![Render](https://img.shields.io/badge/Render-Frontend_Hosted-46E3B7.svg?style=for-the-badge&logo=render&logoColor=white)](https://grievance-dashboard.onrender.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/ankursingh01/govt-grievance)
 [![Neon](https://img.shields.io/badge/Neon-pgvector-00E599.svg?style=for-the-badge&logo=postgresql&logoColor=white)](https://neon.tech)
 [![Gemini](https://img.shields.io/badge/Google_Gemini-RAG_Grounded-8E75C2.svg?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev)
+
 
 ## 📌 Executive Summary
 
