@@ -30,6 +30,10 @@ class Settings(BaseSettings):
 
     @property
     def checkpoint_path(self) -> Path:
+        # Prefer fp16 compressed model (452MB) over original (905MB)
+        fp16_path = PROJECT_ROOT / "outputs" / "submission_muril_model_fp16.pt"
+        if fp16_path.exists():
+            return fp16_path
         muril_path = PROJECT_ROOT / "outputs" / "submission_muril_model.pt"
         if muril_path.exists():
             return muril_path

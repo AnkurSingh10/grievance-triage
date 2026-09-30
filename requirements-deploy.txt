@@ -1,0 +1,17 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Core inference dependencies only
+numpy>=1.26
+torch>=2.5
+transformers>=4.40
+python-dotenv>=1.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic-settings>=2.6
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+pgvector>=0.3
+sentence-transformers>=3.3
+langchain-core>=0.3
+langchain-google-genai>=2.0
+streamlit>=1.40

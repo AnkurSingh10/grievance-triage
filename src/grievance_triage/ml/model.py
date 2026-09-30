@@ -166,7 +166,8 @@ def load_trained_model(path, device=None):
         # all weights come from the checkpoint instead.
         model = MuRILMultiTask(config, len(checkpoint["category_labels"]), len(checkpoint["urgency_labels"]), from_pretrained=False)
         model.load_state_dict(checkpoint["model_state_dict"], strict=False)
-        model.to(config.device).eval()
+        # Ensure float32 for CPU inference (needed if checkpoint was saved in fp16)
+        model.float().to(config.device).eval()
         outputs_dir = Path(path).parent
         if (outputs_dir / "tokenizer.json").exists():
             tokenizer = AutoTokenizer.from_pretrained(str(outputs_dir))

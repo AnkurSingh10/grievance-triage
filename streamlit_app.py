@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import streamlit as st
 from sqlalchemy import func, select
@@ -56,17 +57,49 @@ with citizen_tab:
         if not citizen_id or not subject or not body or not district:
             st.error("Citizen ID, subject, complaint, and district are required.")
         else:
-            session = SessionLocal()
-            try:
-                complaint = create_complaint(session, ComplaintCreate(
-                    citizen_id=citizen_id, subject=subject, body=body,
-                    district=district, channel=channel,
-                ))
-                st.session_state["last_complaint_id"] = str(complaint.id)
-                st.success(f"Complaint submitted: {complaint.id}")
-                st.dataframe(pd.DataFrame([complaint_summary(complaint)]), use_container_width=True, hide_index=True)
-            finally:
-                session.close()
+            api_url = os.getenv("API_BASE_URL", "").rstrip("/")
+            if api_url:
+                import requests
+                try:
+                    resp = requests.post(f"{api_url}/complaints", json={
+                        "citizen_id": citizen_id,
+                        "subject": subject,
+                        "body": body,
+                        "district": district,
+                        "channel": channel,
+                        "complaint_history": [],
+                    }, timeout=60)
+                    if resp.status_code == 201:
+                        data = resp.json()
+                        st.session_state["last_complaint_id"] = data["id"]
+                        st.success(f"Complaint submitted: {data['id']}")
+                        st.dataframe(pd.DataFrame([{
+                            "Complaint ID": data["id"],
+                            "District": data["district"],
+                            "Department": data["department"],
+                            "Department confidence": round(data.get("department_confidence", 0), 3),
+                            "Urgency": data["urgency"],
+                            "Urgency confidence": round(data.get("urgency_confidence", 0), 3),
+                            "Priority": data["priority"],
+                            "Status": data["status"],
+                            "Issue group": str(data.get("issue_group_id", "")),
+                        }]), use_container_width=True, hide_index=True)
+                    else:
+                        st.error(f"API Error ({resp.status_code}): {resp.text}")
+                except Exception as ex:
+                    st.error(f"Failed to connect to API: {ex}")
+            else:
+                session = SessionLocal()
+                try:
+                    complaint = create_complaint(session, ComplaintCreate(
+                        citizen_id=citizen_id, subject=subject, body=body,
+                        district=district, channel=channel,
+                    ))
+                    st.session_state["last_complaint_id"] = str(complaint.id)
+                    st.success(f"Complaint submitted: {complaint.id}")
+                    st.dataframe(pd.DataFrame([complaint_summary(complaint)]), use_container_width=True, hide_index=True)
+                finally:
+                    session.close()
 
     st.divider()
     st.subheader("Track complaint")
