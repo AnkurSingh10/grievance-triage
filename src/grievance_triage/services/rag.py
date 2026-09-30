@@ -7,11 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database.models import Complaint, KnowledgeDocument
+from ..ml.embeddings import generate_embedding
 from ..core.settings import get_settings
 
 
 def officer_assistance(session: Session, complaint: Complaint) -> dict:
-    from ..ml.embeddings import generate_embedding
 
     settings = get_settings()
     query_embedding = generate_embedding(f"{complaint.subject}\n{complaint.body}")
@@ -27,7 +27,7 @@ def officer_assistance(session: Session, complaint: Complaint) -> dict:
     policy_context = "\n\n".join(f"[{doc.source}] {doc.content}" for doc, _ in policies)
     case_context = "\n\n".join(f"[{case.id}] {case.subject}: {case.body}" for case in resolved)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You assist a government officer. Use only the supplied sources. Do not invent policy. Return valid JSON with summary, suggested_next_steps, and citations."),
+        ("system", "You assist a government officer. Use only the supplied sources. Do not invent policy. Return a valid JSON object with keys: 'summary' (string), 'suggested_next_steps' (list of strings), and 'citations' (list of strings)."),
         ("human", "Complaint:\n{complaint}\n\nPolicies:\n{policies}\n\nResolved cases:\n{cases}"),
     ])
     llm = ChatGoogleGenerativeAI(model=settings.gemini_model, google_api_key=settings.google_api_key, temperature=settings.gemini_temperature)
@@ -48,10 +48,30 @@ def officer_assistance(session: Session, complaint: Complaint) -> dict:
         if isinstance(nested_result, dict):
             result = {**result, **nested_result}
 
-    if isinstance(result.get("summary"), str):
-        result["summary"] = result["summary"].replace("```json", "").replace("```", "").strip()
-    result.setdefault("relevant_policies", [{"source": doc.source, "similarity": float(score)} for doc, score in policies])
-    result.setdefault("similar_resolved_cases", [{"id": str(case.id), "subject": case.subject} for case in resolved])
-    result.setdefault("suggested_next_steps", [])
-    result.setdefault("citations", [doc.source for doc, _ in policies])
+    # Normalize summary
+    if not isinstance(result.get("summary"), str):
+        result["summary"] = str(result.get("summary") or "No summary available.")
+    result["summary"] = result["summary"].replace("```json", "").replace("```", "").strip()
+
+    # Normalize suggested_next_steps to list[str]
+    steps = result.get("suggested_next_steps")
+    if isinstance(steps, str):
+        result["suggested_next_steps"] = [steps] if steps.strip() else []
+    elif isinstance(steps, list):
+        result["suggested_next_steps"] = [str(s) for s in steps]
+    else:
+        result["suggested_next_steps"] = []
+
+    # Normalize citations to list[str]
+    citations = result.get("citations")
+    if isinstance(citations, str):
+        result["citations"] = [citations] if citations.strip() else []
+    elif isinstance(citations, list):
+        result["citations"] = [str(c) for c in citations]
+    else:
+        result["citations"] = [doc.source for doc, _ in policies]
+
+    result["relevant_policies"] = [{"source": doc.source, "similarity": float(score)} for doc, score in policies]
+    result["similar_resolved_cases"] = [{"id": str(case.id), "subject": case.subject} for case in resolved]
     return result
+

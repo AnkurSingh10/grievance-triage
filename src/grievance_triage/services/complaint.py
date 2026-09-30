@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from ..api.schemas import ComplaintCreate
 from ..database.models import Complaint, ComplaintRelation, IssueGroup, StatusHistory
 from ..core.settings import get_settings
+from ..ml.embeddings import generate_embedding
+from ..ml.inference import predict_complaint
 from .priority import calculate_priority, sla_deadline
 
 UNRESOLVED = {"SUBMITTED", "CLASSIFIED", "FORWARDED", "ASSIGNED", "UNDER_INVESTIGATION", "ACTION_TAKEN", "ESCALATED", "REOPENED"}
@@ -25,10 +27,8 @@ def find_similar(session: Session, department: str, embedding: list[float], top_
 
 
 def create_complaint(session: Session, payload: ComplaintCreate) -> Complaint:
-    from ..ml.embeddings import generate_embedding
-    from ..ml.inference import predict_complaint
-
     prediction = predict_complaint(payload.subject, payload.body, payload.channel, payload.complaint_history)
+
     embedding = generate_embedding(f"{payload.subject}\n{payload.body}")
     candidates = find_similar(session, prediction["department"], embedding)
     threshold = get_settings().complaint_similarity_threshold

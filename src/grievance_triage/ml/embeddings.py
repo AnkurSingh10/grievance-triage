@@ -9,9 +9,11 @@ from ..core.settings import get_settings
 def get_embedding_model():
     settings = get_settings()
     model = SentenceTransformer(settings.embedding_model)
-    if model.get_sentence_embedding_dimension() != settings.embedding_dimension:
+    dim = getattr(model, "get_embedding_dimension", getattr(model, "get_sentence_embedding_dimension", None))()
+    if dim != settings.embedding_dimension:
         raise ValueError("EMBEDDING_DIMENSION does not match the selected Sentence Transformer model")
     return model
+
 
 
 def generate_embedding(text: str) -> list[float]:
