@@ -31,6 +31,16 @@ jobs:
 
             IMAGE_URI="ankursingh01/govt-grievance:latest"
 
+            # 0. Create 4GB swap if not already present (needed for 950MB model loading)
+            if [ ! -f /swapfile ]; then
+              sudo fallocate -l 4G /swapfile
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+            fi
+            sudo swapon /swapfile 2>/dev/null || true
+
             # 1. Stop and remove all running containers
             docker ps -q | xargs -r docker rm -f || true
             docker rm -f grievance-api grievance-dashboard grievance-triage-api-1 grievance-triage-dashboard-1 || true
