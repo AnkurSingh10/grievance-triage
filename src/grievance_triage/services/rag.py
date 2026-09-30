@@ -7,11 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database.models import Complaint, KnowledgeDocument
-from ..ml.embeddings import generate_embedding
 from ..core.settings import get_settings
 
 
 def officer_assistance(session: Session, complaint: Complaint) -> dict:
+    from ..ml.embeddings import generate_embedding
+
     settings = get_settings()
     query_embedding = generate_embedding(f"{complaint.subject}\n{complaint.body}")
     distance = KnowledgeDocument.embedding.cosine_distance(query_embedding)
