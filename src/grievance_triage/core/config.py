@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 
-import torch
+
+def _get_default_device() -> str:
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
+
 
 CATEGORY_LABELS = [
     "roads_transport", "water_supply", "electricity", "healthcare",
@@ -12,7 +19,7 @@ URGENCY_LABELS = ["routine", "high", "critical"]
 @dataclass
 class Config:
     seed: int = 42
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = _get_default_device()
     token_level: str = "char"
     max_vocab: int = 4000
     min_freq: int = 2
