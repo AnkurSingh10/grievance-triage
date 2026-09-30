@@ -1,14 +1,21 @@
 import os
+import sys
+from pathlib import Path
+from uuid import UUID
 import pandas as pd
+import requests
 import streamlit as st
 from sqlalchemy import func, select
-from uuid import UUID
+
+# Ensure src/ is in sys.path so grievance_triage can always be imported
+SRC_DIR = Path(__file__).resolve().parent / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 from grievance_triage.api.schemas import ComplaintCreate, KnowledgeDocumentCreate
 from grievance_triage.database.models import Complaint, ComplaintRelation, IssueGroup, KnowledgeDocument, StatusHistory
 from grievance_triage.database.session import SessionLocal, init_db
-from grievance_triage.ml.embeddings import generate_embedding
-from grievance_triage.services.complaint import create_complaint, update_complaint_assignment, update_status
+from grievance_triage.services.complaint import update_complaint_assignment, update_status
 from grievance_triage.services.rag import officer_assistance
 
 init_db()
@@ -89,6 +96,7 @@ with citizen_tab:
                 except Exception as ex:
                     st.error(f"Failed to connect to API: {ex}")
             else:
+                from grievance_triage.services.complaint import create_complaint
                 session = SessionLocal()
                 try:
                     complaint = create_complaint(session, ComplaintCreate(
@@ -243,17 +251,34 @@ with knowledge_tab:
         if not knowledge_department or not source or not content:
             st.error("Department, source, and content are required.")
         else:
-            session = SessionLocal()
-            try:
-                document = KnowledgeDocument(**KnowledgeDocumentCreate(
-                    department=knowledge_department, document_type=document_type,
-                    source=source, content=content,
-                ).model_dump(), embedding=generate_embedding(content))
-                session.add(document)
-                session.commit()
-                st.success(f"Stored knowledge document {document.id} in Neon.")
-            finally:
-                session.close()
+            api_url = os.getenv("API_BASE_URL", "").rstrip("/")
+            if api_url:
+                try:
+                    resp = requests.post(f"{api_url}/knowledge-documents", json={
+                        "department": knowledge_department,
+                        "document_type": document_type,
+                        "source": source,
+                        "content": content,
+                    }, timeout=60)
+                    if resp.status_code == 200:
+                        st.success(f"Stored knowledge document {resp.json().get('id')} in Neon.")
+                    else:
+                        st.error(f"API Error ({resp.status_code}): {resp.text}")
+                except Exception as ex:
+                    st.error(f"Failed to connect to API: {ex}")
+            else:
+                from grievance_triage.ml.embeddings import generate_embedding
+                session = SessionLocal()
+                try:
+                    document = KnowledgeDocument(**KnowledgeDocumentCreate(
+                        department=knowledge_department, document_type=document_type,
+                        source=source, content=content,
+                    ).model_dump(), embedding=generate_embedding(content))
+                    session.add(document)
+                    session.commit()
+                    st.success(f"Stored knowledge document {document.id} in Neon.")
+                finally:
+                    session.close()
     session = SessionLocal()
     try:
         documents = session.execute(select(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc())).scalars().all()
